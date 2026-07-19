@@ -96,6 +96,37 @@ async function saveToCloud() {
     }
 }
 
+// Migrate data from old per-device documents to the shared document
+async function migrateOldData() {
+    if (!isFirebaseReady) return false;
+
+    try {
+        const snapshot = await db.collection('study-tracker').get();
+        let migrated = false;
+        snapshot.forEach((doc) => {
+            if (doc.id === SHARED_DOC_ID) return; // skip the shared doc itself
+            const data = doc.data();
+            if (data && data.topics && data.topics.length > 0) {
+                topics = data.topics;
+                if (data.examDate) {
+                    examDate = new Date(data.examDate);
+                    if (isNaN(examDate.getTime())) examDate = null;
+                }
+                migrated = true;
+            }
+        });
+        if (migrated) {
+            // Save the migrated data to the shared document
+            await saveToCloud();
+            console.log('✅ Migrated old data to shared document');
+            return true;
+        }
+    } catch (e) {
+        console.error('Migration check failed:', e);
+    }
+    return false;
+}
+
 // Load all data from Firestore using the fixed document ID
 async function loadFromCloud() {
     if (!isFirebaseReady) return false;
@@ -111,6 +142,10 @@ async function loadFromCloud() {
             }
             return true;
         }
+
+        // Shared doc doesn't exist — check for old per-device docs to migrate
+        const migrated = await migrateOldData();
+        return migrated;
     } catch (e) {
         console.error('Cloud load failed:', e);
     }
@@ -184,8 +219,10 @@ async function saveData() {
 function showCountdown() {
     examSetup.style.display = 'none';
     examCountdown.style.display = 'block';
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    countdownDateLabel.textContent = `Exam: ${examDate.toLocaleDateString('en-US', options)}`;
+    // Display the exam date in Philippine Time (PHT, UTC+8)
+    const phtDate = new Date(examDate.getTime() + (8 * 60 * 60 * 1000));
+    const options = { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' };
+    countdownDateLabel.textContent = `Exam: ${phtDate.toLocaleDateString('en-US', options)} (PHT)`;
     startCountdown();
 }
 
@@ -521,7 +558,15 @@ examSetBtn.addEventListener('click', async () => {
         alert('Please select a date!');
         return;
     }
-    examDate = new Date(val + 'T23:59:59');
+
+    // Parse the date as Philippine Time (PHT, UTC+8) so all devices see the same countdown
+    const parts = val.split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1; // 0-indexed
+    const day = parseInt(parts[2]);
+    // Midnight PHT = 16:00 UTC the previous day
+    examDate = new Date(Date.UTC(year, month, day, 0, 0, 0) - (8 * 60 * 60 * 1000));
+
     if (isNaN(examDate.getTime())) {
         alert('Invalid date!');
         return;
