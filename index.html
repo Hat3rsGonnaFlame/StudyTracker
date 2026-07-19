@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌸 Study Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Floating decorations -->
+    <div class="floating-hearts">
+        <span>🌸</span><span>✨</span><span>🌸</span><span>💖</span><span>🌸</span>
+        <span>✨</span><span>🌸</span><span>💖</span><span>🌸</span><span>✨</span>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="header-deco">
+                <span class="deco-char">🌸</span>
+                <span class="deco-char">💖</span>
+                <span class="deco-char">🌸</span>
+            </div>
+            <h1>Study Tracker</h1>
+            <p class="subtitle">keep track of your study topics ✨</p>
+            <div class="header-deco">
+                <span class="deco-char">🌸</span>
+                <span class="deco-char">💖</span>
+                <span class="deco-char">🌸</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Exam Countdown -->
+            <div class="exam-section">
+                <div class="exam-setup" id="examSetup">
+                    <label class="exam-label">📅 Exam Date</label>
+                    <div class="exam-input-row">
+                        <input type="date" id="examDateInput">
+                        <button id="examSetBtn">Set Date</button>
+                    </div>
+                </div>
+                <div class="exam-countdown" id="examCountdown" style="display: none;">
+                    <div class="countdown-header">
+                        <span>📅 Countdown to Exam</span>
+                        <button id="examClearBtn" class="btn-small" title="Clear exam date">✕</button>
+                    </div>
+                    <div class="countdown-display">
+                        <div class="countdown-unit">
+                            <span class="countdown-value" id="countdownDays">0</span>
+                            <span class="countdown-label">days</span>
+                        </div>
+                        <div class="countdown-sep">:</div>
+                        <div class="countdown-unit">
+                            <span class="countdown-value" id="countdownHours">0</span>
+                            <span class="countdown-label">hours</span>
+                        </div>
+                        <div class="countdown-sep">:</div>
+                        <div class="countdown-unit">
+                            <span class="countdown-value" id="countdownMinutes">0</span>
+                            <span class="countdown-label">min</span>
+                        </div>
+                        <div class="countdown-sep">:</div>
+                        <div class="countdown-unit">
+                            <span class="countdown-value" id="countdownSeconds">0</span>
+                            <span class="countdown-label">sec</span>
+                        </div>
+                    </div>
+                    <div class="countdown-date" id="countdownDateLabel"></div>
+                </div>
+            </div>
+
+            <div class="add-topic">
+                <input type="text" id="topicInput" placeholder="Enter a new topic..." maxlength="100">
+                <select id="statusSelect">
+                    <option value="todo">📋 To Do</option>
+                    <option value="in-progress">📖 In Progress</option>
+                    <option value="done">✅ Done</option>
+                </select>
+                <button id="addBtn">+ Add Topic</button>
+            </div>
+
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">🌸 All</button>
+                <button class="filter-btn" data-filter="todo">📋 To Do</button>
+                <button class="filter-btn" data-filter="in-progress">📖 In Progress</button>
+                <button class="filter-btn" data-filter="done">✅ Done</button>
+            </div>
+
+            <div class="stats">
+                <span id="totalCount">0 topics</span>
+                <span id="doneCount">0 completed</span>
+            </div>
+
+            <ul id="topicList"></ul>
+
+            <div id="emptyState" class="empty-state">
+                <div class="empty-icon">📚</div>
+                <p class="empty-title">No topics yet!</p>
+                <p class="empty-sub">Add your first study topic above 💕</p>
+            </div>
+
+            <!-- Pie Chart -->
+            <div class="chart-section">
+                <div class="chart-container">
+                    <svg id="pieChart" viewBox="0 0 240 240" width="200" height="200">
+                        <circle cx="120" cy="120" r="100" fill="none" stroke="#f0d4e8" stroke-width="40" />
+                    </svg>
+                    <div class="chart-center-text" id="chartCenterText">0%</div>
+                </div>
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: #ffb74d;"></span>
+                        <span>To Do</span>
+                        <span class="legend-count" id="legendTodo">0</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: #64b5f6;"></span>
+                        <span>In Progress</span>
+                        <span class="legend-count" id="legendProgress">0</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: #81c784;"></span>
+                        <span>Done</span>
+                        <span class="legend-count" id="legendDone">0</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>made with <span class="heart">❤️</span> for you</p>
+        </footer>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
