@@ -52,13 +52,7 @@ To sync data across all devices, you need a free Firebase project:
 
 ```javascript
 const firebaseConfig = {
-    apiKey: "AIzaSyDLI3tLx8eLaXtOcWa4Fhi9xWImUI6W4e4",
-  authDomain: "cherryltracker.firebaseapp.com",
-  projectId: "cherryltracker",
-  storageBucket: "cherryltracker.firebasestorage.app",
-  messagingSenderId: "43502910840",
-  appId: "1:43502910840:web:5e610f0a757ff573339c8d",
-  measurementId: "G-QWNEJ8C9G0"
+ 
 };
 ```
 
