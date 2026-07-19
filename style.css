@@ -347,6 +347,37 @@ header h1 {
     gap: 6px;
 }
 
+.topic-item .reorder-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.btn-reorder {
+    background: rgba(232, 160, 200, 0.15);
+    color: #d4a8c8;
+    border: none;
+    border-radius: 6px;
+    width: 24px;
+    height: 20px;
+    font-size: 0.6rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.btn-reorder:hover {
+    background: rgba(232, 160, 200, 0.35);
+    color: #d63384;
+    transform: scale(1.1);
+}
+
 .topic-item .actions button {
     padding: 8px 12px;
     border: none;

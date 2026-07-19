@@ -45,6 +45,9 @@ let examDate = null;
 let countdownInterval = null;
 let dataLoaded = false;
 
+// Fixed document ID so all devices share the same data
+const SHARED_DOC_ID = 'cherryl-shared-data';
+
 // DOM Elements
 const topicInput = document.getElementById('topicInput');
 const statusSelect = document.getElementById('statusSelect');
@@ -75,28 +78,15 @@ const legendProgress = document.getElementById('legendProgress');
 const legendDone = document.getElementById('legendDone');
 
 // ============================================================
-// CLOUD SYNC (Firestore)
+// CLOUD SYNC (Firestore) — shared across all devices
 // ============================================================
 
-// Generate a device ID so each device has its own data set
-// (or share the same ID across devices to share data)
-function getDeviceId() {
-    let deviceId = localStorage.getItem('cherryl-device-id');
-    if (!deviceId) {
-        deviceId = 'device_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-        localStorage.setItem('cherryl-device-id', deviceId);
-    }
-    return deviceId;
-}
-
-const DEVICE_ID = getDeviceId();
-
-// Save all data to Firestore
+// Save all data to Firestore using a fixed document ID
 async function saveToCloud() {
     if (!isFirebaseReady) return;
 
     try {
-        await db.collection('study-tracker').doc(DEVICE_ID).set({
+        await db.collection('study-tracker').doc(SHARED_DOC_ID).set({
             topics: topics,
             examDate: examDate ? examDate.toISOString() : null,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -106,12 +96,12 @@ async function saveToCloud() {
     }
 }
 
-// Load all data from Firestore
+// Load all data from Firestore using the fixed document ID
 async function loadFromCloud() {
     if (!isFirebaseReady) return false;
 
     try {
-        const doc = await db.collection('study-tracker').doc(DEVICE_ID).get();
+        const doc = await db.collection('study-tracker').doc(SHARED_DOC_ID).get();
         if (doc.exists) {
             const data = doc.data();
             if (data.topics) topics = data.topics;
@@ -306,7 +296,10 @@ function renderPieChart() {
 // ============================================================
 
 function render() {
-    const filtered = topics.filter(t => {
+    // Sort topics by rank (ascending) for consistent ordering
+    const sortedTopics = [...topics].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+
+    const filtered = sortedTopics.filter(t => {
         if (currentFilter === 'all') return true;
         return t.status === currentFilter;
     });
@@ -323,6 +316,31 @@ function render() {
         filtered.forEach((topic) => {
             const li = document.createElement('li');
             li.className = 'topic-item';
+
+            // Reorder buttons (up / down)
+            const reorderDiv = document.createElement('div');
+            reorderDiv.className = 'reorder-buttons';
+
+            const upBtn = document.createElement('button');
+            upBtn.className = 'btn-reorder';
+            upBtn.textContent = '▲';
+            upBtn.title = 'Move up';
+            upBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await moveTopic(topic.id, -1);
+            });
+
+            const downBtn = document.createElement('button');
+            downBtn.className = 'btn-reorder';
+            downBtn.textContent = '▼';
+            downBtn.title = 'Move down';
+            downBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await moveTopic(topic.id, 1);
+            });
+
+            reorderDiv.appendChild(upBtn);
+            reorderDiv.appendChild(downBtn);
 
             const nameSpan = document.createElement('span');
             nameSpan.className = 'topic-name' + (topic.status === 'done' ? ' done-text' : '');
@@ -388,6 +406,7 @@ function render() {
             });
             actions.appendChild(deleteBtn);
 
+            li.appendChild(reorderDiv);
             li.appendChild(nameSpan);
             li.appendChild(badge);
             li.appendChild(actions);
@@ -407,6 +426,31 @@ function updateStats() {
 }
 
 // ============================================================
+// REORDER TOPICS
+// ============================================================
+
+async function moveTopic(topicId, direction) {
+    // Sort by rank to find adjacent topics
+    const sorted = [...topics].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+    const currentIndex = sorted.findIndex(t => t.id === topicId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+
+    const currentTopic = sorted[currentIndex];
+    const targetTopic = sorted[targetIndex];
+
+    // Swap ranks
+    const tempRank = currentTopic.rank;
+    currentTopic.rank = targetTopic.rank;
+    targetTopic.rank = tempRank;
+
+    await saveData();
+    render();
+}
+
+// ============================================================
 // ADD TOPIC
 // ============================================================
 
@@ -422,10 +466,14 @@ async function addTopic() {
         return;
     }
 
+    // Determine the next rank (highest existing rank + 1)
+    const maxRank = topics.reduce((max, t) => Math.max(max, t.rank ?? 0), -1);
+
     const topic = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         name: name,
         status: statusSelect.value,
+        rank: maxRank + 1,
         createdAt: new Date().toISOString()
     };
 
@@ -494,6 +542,18 @@ examClearBtn.addEventListener('click', async () => {
 
 (async function init() {
     await loadData();
+
+    // Ensure all existing topics have a rank assigned (for backward compatibility)
+    let needsSave = false;
+    topics.forEach((t, i) => {
+        if (t.rank === undefined || t.rank === null) {
+            t.rank = i;
+            needsSave = true;
+        }
+    });
+    if (needsSave) {
+        await saveData();
+    }
 
     if (examDate) {
         showCountdown();
