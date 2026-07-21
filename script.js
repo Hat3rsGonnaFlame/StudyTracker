@@ -483,7 +483,7 @@ function selectCalendarDay(dateStr) {
 function clearDateFilter() {
     calendarDateFilter = null;
     filterInfo.style.display = 'none';
-    topicDateInput.value = new Date().toISOString().slice(0, 10);
+    topicDateInput.value = '';
     render();
 }
 
@@ -627,6 +627,13 @@ function createTopicElement(topic) {
         dateBadge.textContent = d.toLocaleDateString('en-US', options);
         dateBadge.title = 'Click to change date';
         dateEditContainer.appendChild(dateBadge);
+    } else {
+        // Show a "+" button to add a date to unscheduled topics
+        const addDateBtn = document.createElement('span');
+        addDateBtn.className = 'topic-date-add';
+        addDateBtn.textContent = '📅+';
+        addDateBtn.title = 'Add a date to this topic';
+        dateEditContainer.appendChild(addDateBtn);
     }
 
     const dateInput = document.createElement('input');
@@ -647,15 +654,19 @@ function createTopicElement(topic) {
         dateInput.style.display = 'none';
         const badge = dateEditContainer.querySelector('.topic-date-badge');
         if (badge) badge.style.display = '';
+        const addBtn = dateEditContainer.querySelector('.topic-date-add');
+        if (addBtn) addBtn.style.display = '';
     });
 
     dateEditContainer.appendChild(dateInput);
 
-    // Click the badge to show the date picker
+    // Click the badge (or add button) to show the date picker
     dateEditContainer.addEventListener('click', (e) => {
         if (e.target === dateInput) return; // don't toggle if clicking input itself
         const badge = dateEditContainer.querySelector('.topic-date-badge');
         if (badge) badge.style.display = 'none';
+        const addBtn = dateEditContainer.querySelector('.topic-date-add');
+        if (addBtn) addBtn.style.display = 'none';
         dateInput.style.display = '';
         dateInput.showPicker ? dateInput.showPicker() : dateInput.focus();
     });
@@ -913,8 +924,8 @@ examClearBtn.addEventListener('click', async () => {
         await saveData();
     }
 
-    // Set default date on topic date input to today
-    topicDateInput.value = new Date().toISOString().slice(0, 10);
+    // Leave date input empty by default — only assign a date when you want to
+    topicDateInput.value = '';
 
     if (examDate) {
         showCountdown();
