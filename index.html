@@ -72,14 +72,42 @@
                 </div>
             </div>
 
+            <!-- View Toggle -->
+            <div class="view-toggle">
+                <button class="view-btn active" data-view="list">📋 List</button>
+                <button class="view-btn" data-view="calendar">📅 Calendar</button>
+            </div>
+
+            <!-- Add Topic -->
             <div class="add-topic">
                 <input type="text" id="topicInput" placeholder="Enter a new topic..." maxlength="100">
+                <input type="date" id="topicDateInput">
                 <select id="statusSelect">
                     <option value="todo">📋 To Do</option>
                     <option value="in-progress">📖 In Progress</option>
                     <option value="done">✅ Done</option>
                 </select>
                 <button id="addBtn">+ Add Topic</button>
+            </div>
+
+            <!-- Calendar View -->
+            <div id="calendarView" class="calendar-section" style="display: none;">
+                <div class="calendar-nav">
+                    <button id="calendarPrevBtn" class="btn-calendar-nav">◀</button>
+                    <span id="calendarMonthLabel" class="calendar-month-label"></span>
+                    <button id="calendarNextBtn" class="btn-calendar-nav">▶</button>
+                </div>
+                <div class="calendar-weekdays">
+                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                </div>
+                <div id="calendarGrid" class="calendar-grid"></div>
+                <p class="calendar-hint">Click a day to view & add topics for that date</p>
+            </div>
+
+            <!-- Filter info bar (shown in list view or when a day is selected) -->
+            <div id="filterInfo" class="filter-info" style="display: none;">
+                <span id="filterInfoText"></span>
+                <button id="clearDateFilterBtn" class="btn-clear-filter">✕ Clear</button>
             </div>
 
             <div class="filters">

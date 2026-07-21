@@ -44,12 +44,17 @@ let currentFilter = 'all';
 let examDate = null;
 let countdownInterval = null;
 let dataLoaded = false;
+let currentView = 'list'; // 'list' or 'calendar'
+let calendarDateFilter = null; // YYYY-MM-DD string when a day is selected in calendar
+let calendarMonth = new Date();
+calendarMonth.setDate(1); // First of current month for calendar rendering
 
 // Fixed document ID so all devices share the same data
 const SHARED_DOC_ID = 'cherryl-shared-data';
 
 // DOM Elements
 const topicInput = document.getElementById('topicInput');
+const topicDateInput = document.getElementById('topicDateInput');
 const statusSelect = document.getElementById('statusSelect');
 const addBtn = document.getElementById('addBtn');
 const topicList = document.getElementById('topicList');
@@ -57,6 +62,21 @@ const emptyState = document.getElementById('emptyState');
 const totalCount = document.getElementById('totalCount');
 const doneCount = document.getElementById('doneCount');
 const filterBtns = document.querySelectorAll('.filter-btn');
+
+// View toggle elements
+const viewBtns = document.querySelectorAll('.view-btn');
+const calendarView = document.getElementById('calendarView');
+
+// Filter info bar
+const filterInfo = document.getElementById('filterInfo');
+const filterInfoText = document.getElementById('filterInfoText');
+const clearDateFilterBtn = document.getElementById('clearDateFilterBtn');
+
+// Calendar elements
+const calendarGrid = document.getElementById('calendarGrid');
+const calendarMonthLabel = document.getElementById('calendarMonthLabel');
+const calendarPrevBtn = document.getElementById('calendarPrevBtn');
+const calendarNextBtn = document.getElementById('calendarNextBtn');
 
 // Exam countdown elements
 const examSetup = document.getElementById('examSetup');
@@ -329,16 +349,170 @@ function renderPieChart() {
 }
 
 // ============================================================
+// DATE HELPERS
+// ============================================================
+
+function formatDateLabel(dateStr) {
+    if (!dateStr) return '📅 Unscheduled';
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+    if (dateStr === todayStr) return '📅 Today';
+    if (dateStr === yesterdayStr) return '📅 Yesterday';
+    if (dateStr === tomorrowStr) return '📅 Tomorrow';
+
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    return `📅 ${d.toLocaleDateString('en-US', options)}`;
+}
+
+// ============================================================
+// CALENDAR
+// ============================================================
+
+function renderCalendar() {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+
+    // Set label
+    const options = { year: 'numeric', month: 'long' };
+    calendarMonthLabel.textContent = calendarMonth.toLocaleDateString('en-US', options);
+
+    // Build date lookup for topics
+    const dateCounts = {};
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    topics.forEach(t => {
+        const d = t.date || 'unscheduled';
+        if (!dateCounts[d]) dateCounts[d] = 0;
+        dateCounts[d]++;
+    });
+
+    // First day of month (0=Sun)
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    let html = '';
+
+    // Previous month's trailing days
+    const prevMonthYear = month === 0 ? year - 1 : year;
+    const prevMonth = month === 0 ? 11 : month - 1;
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const day = daysInPrevMonth - i;
+        const dateStr = `${prevMonthYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = dateCounts[dateStr] || 0;
+        html += `<div class="calendar-day other-month">${day}${count > 0 ? `<span class="day-dot"></span>` : ''}</div>`;
+    }
+
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = dateCounts[dateStr] || 0;
+        const isToday = dateStr === todayStr;
+        const isSelected = dateStr === calendarDateFilter;
+        const hasTopics = count > 0;
+
+        let cls = 'calendar-day';
+        if (isToday) cls += ' today';
+        if (isSelected) cls += ' selected';
+        if (hasTopics) cls += ' has-topics';
+
+        html += `<div class="${cls}" data-date="${dateStr}">`;
+        html += `<span>${day}</span>`;
+        if (count > 0) {
+            html += `<span class="day-count">${count}</span>`;
+        }
+        html += `</div>`;
+    }
+
+    // Next month's leading days to fill 6 rows (42 cells)
+    const totalCells = firstDay + daysInMonth;
+    const remaining = totalCells <= 35 ? 35 - totalCells : 42 - totalCells;
+    const nextMonthYear = month === 11 ? year + 1 : year;
+    const nextMonth = month === 11 ? 0 : month + 1;
+    for (let day = 1; day <= remaining; day++) {
+        const dateStr = `${nextMonthYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = dateCounts[dateStr] || 0;
+        html += `<div class="calendar-day other-month">${day}${count > 0 ? `<span class="day-dot"></span>` : ''}</div>`;
+    }
+
+    calendarGrid.innerHTML = html;
+
+    // Click handlers on calendar days
+    calendarGrid.querySelectorAll('.calendar-day:not(.other-month)').forEach(el => {
+        el.addEventListener('click', () => {
+            const date = el.dataset.date;
+            selectCalendarDay(date);
+        });
+    });
+}
+
+function selectCalendarDay(dateStr) {
+    // Set the date filter and switch to list view
+    calendarDateFilter = dateStr;
+    currentView = 'list';
+
+    // Update view buttons
+    viewBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === 'list');
+    });
+    calendarView.style.display = 'none';
+
+    // Show filter info bar
+    filterInfo.style.display = 'flex';
+    const count = topics.filter(t => (t.date || 'unscheduled') === dateStr).length;
+    const label = formatDateLabel(dateStr);
+    filterInfoText.textContent = `${label} — ${count} topic${count !== 1 ? 's' : ''}`;
+
+    // Set the topic date input to this date so new topics go here
+    topicDateInput.value = dateStr;
+
+    render();
+
+    // Re-render calendar so selected day is highlighted (if we switch back)
+    renderCalendar();
+}
+
+function clearDateFilter() {
+    calendarDateFilter = null;
+    filterInfo.style.display = 'none';
+    topicDateInput.value = new Date().toISOString().slice(0, 10);
+    render();
+}
+
+// ============================================================
 // RENDER
 // ============================================================
 
 function render() {
-    // Sort topics by rank (ascending) for consistent ordering
-    const sortedTopics = [...topics].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+    // ---- Sorting ----
+    // 1. First sort by rank (ascending) for stable ordering
+    // 2. Then sort so that 'done' topics move to the bottom
+    const sortedTopics = [...topics].sort((a, b) => {
+        // Done status always goes to bottom
+        if (a.status === 'done' && b.status !== 'done') return 1;
+        if (a.status !== 'done' && b.status === 'done') return -1;
+        // Within same status-group, sort by rank
+        return (a.rank ?? 0) - (b.rank ?? 0);
+    });
 
-    const filtered = sortedTopics.filter(t => {
-        if (currentFilter === 'all') return true;
-        return t.status === currentFilter;
+    // ---- Filtering ----
+    let filtered = sortedTopics.filter(t => {
+        // Status filter
+        if (currentFilter !== 'all' && t.status !== currentFilter) return false;
+        // Date filter (from calendar click)
+        if (calendarDateFilter !== null) {
+            const topicDate = t.date || 'unscheduled';
+            if (topicDate !== calendarDateFilter) return false;
+        }
+        return true;
     });
 
     topicList.innerHTML = '';
@@ -350,109 +524,203 @@ function render() {
         emptyState.style.display = 'none';
         topicList.style.display = 'block';
 
-        filtered.forEach((topic) => {
-            const li = document.createElement('li');
-            li.className = 'topic-item';
-
-            // Reorder buttons (up / down)
-            const reorderDiv = document.createElement('div');
-            reorderDiv.className = 'reorder-buttons';
-
-            const upBtn = document.createElement('button');
-            upBtn.className = 'btn-reorder';
-            upBtn.textContent = '▲';
-            upBtn.title = 'Move up';
-            upBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await moveTopic(topic.id, -1);
+        // If there's a date filter active, just show flat list (already scoped to a day)
+        if (calendarDateFilter !== null) {
+            filtered.forEach((topic) => {
+                const li = createTopicElement(topic);
+                topicList.appendChild(li);
+            });
+        } else {
+            // Group by date
+            const groups = {};
+            filtered.forEach(t => {
+                const key = t.date || 'unscheduled';
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(t);
             });
 
-            const downBtn = document.createElement('button');
-            downBtn.className = 'btn-reorder';
-            downBtn.textContent = '▼';
-            downBtn.title = 'Move down';
-            downBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await moveTopic(topic.id, 1);
+            // Sort date keys: dated topics first in chronological order, then unscheduled
+            const dateKeys = Object.keys(groups).sort((a, b) => {
+                if (a === 'unscheduled') return 1;
+                if (b === 'unscheduled') return -1;
+                return a.localeCompare(b);
             });
 
-            reorderDiv.appendChild(upBtn);
-            reorderDiv.appendChild(downBtn);
+            for (const dateKey of dateKeys) {
+                const groupTopics = groups[dateKey];
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'date-group';
 
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'topic-name' + (topic.status === 'done' ? ' done-text' : '');
-            nameSpan.textContent = topic.name;
+                const header = document.createElement('div');
+                header.className = 'date-group-header';
+                header.innerHTML = `
+                    <span class="date-group-label">${formatDateLabel(dateKey)}</span>
+                    <span class="date-group-count">${groupTopics.length}</span>
+                `;
+                groupDiv.appendChild(header);
 
-            const badge = document.createElement('span');
-            badge.className = `status-badge status-${topic.status}`;
-            const statusLabels = {
-                'todo': '📋 To Do',
-                'in-progress': '📖 In Progress',
-                'done': '✅ Done'
-            };
-            badge.textContent = statusLabels[topic.status] || topic.status;
-
-            const actions = document.createElement('div');
-            actions.className = 'actions';
-
-            const realIndex = topics.findIndex(t => t.id === topic.id);
-
-            if (topic.status !== 'done') {
-                const doneBtn = document.createElement('button');
-                doneBtn.className = 'btn-status';
-                doneBtn.textContent = '✅ Done';
-                doneBtn.addEventListener('click', async () => {
-                    topics[realIndex].status = 'done';
-                    await saveData();
-                    render();
+                groupTopics.forEach(topic => {
+                    const li = createTopicElement(topic);
+                    groupDiv.appendChild(li);
                 });
-                actions.appendChild(doneBtn);
+
+                topicList.appendChild(groupDiv);
             }
-
-            if (topic.status !== 'in-progress') {
-                const progressBtn = document.createElement('button');
-                progressBtn.className = 'btn-status';
-                progressBtn.textContent = '📖 In Progress';
-                progressBtn.addEventListener('click', async () => {
-                    topics[realIndex].status = 'in-progress';
-                    await saveData();
-                    render();
-                });
-                actions.appendChild(progressBtn);
-            }
-
-            if (topic.status !== 'todo') {
-                const todoBtn = document.createElement('button');
-                todoBtn.className = 'btn-status';
-                todoBtn.textContent = '📋 To Do';
-                todoBtn.addEventListener('click', async () => {
-                    topics[realIndex].status = 'todo';
-                    await saveData();
-                    render();
-                });
-                actions.appendChild(todoBtn);
-            }
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'btn-delete';
-            deleteBtn.textContent = '🗑 Delete';
-            deleteBtn.addEventListener('click', async () => {
-                topics.splice(realIndex, 1);
-                await saveData();
-                render();
-            });
-            actions.appendChild(deleteBtn);
-
-            li.appendChild(reorderDiv);
-            li.appendChild(nameSpan);
-            li.appendChild(badge);
-            li.appendChild(actions);
-            topicList.appendChild(li);
-        });
+        }
     }
 
     updateStats();
     renderPieChart();
+}
+
+function createTopicElement(topic) {
+    const li = document.createElement('li');
+    li.className = 'topic-item';
+
+    // Reorder buttons
+    const reorderDiv = document.createElement('div');
+    reorderDiv.className = 'reorder-buttons';
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'btn-reorder';
+    upBtn.textContent = '▲';
+    upBtn.title = 'Move up';
+    upBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await moveTopic(topic.id, -1);
+    });
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'btn-reorder';
+    downBtn.textContent = '▼';
+    downBtn.title = 'Move down';
+    downBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await moveTopic(topic.id, 1);
+    });
+
+    reorderDiv.appendChild(upBtn);
+    reorderDiv.appendChild(downBtn);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'topic-name' + (topic.status === 'done' ? ' done-text' : '');
+    nameSpan.textContent = topic.name;
+
+    const badge = document.createElement('span');
+    badge.className = `status-badge status-${topic.status}`;
+    const statusLabels = {
+        'todo': '📋 To Do',
+        'in-progress': '📖 In Progress',
+        'done': '✅ Done'
+    };
+    badge.textContent = statusLabels[topic.status] || topic.status;
+
+    // Editable date picker (inline)
+    const dateEditContainer = document.createElement('span');
+    dateEditContainer.className = 'topic-date-edit';
+
+    if (topic.date) {
+        const dateBadge = document.createElement('span');
+        dateBadge.className = 'topic-date-badge';
+        const d = new Date(topic.date + 'T00:00:00');
+        const options = { month: 'short', day: 'numeric' };
+        dateBadge.textContent = d.toLocaleDateString('en-US', options);
+        dateBadge.title = 'Click to change date';
+        dateEditContainer.appendChild(dateBadge);
+    }
+
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.className = 'topic-date-input';
+    dateInput.value = topic.date || '';
+    dateInput.style.display = 'none';
+    dateInput.addEventListener('change', async () => {
+        const newDate = dateInput.value || null;
+        const realIndex = topics.findIndex(t => t.id === topic.id);
+        if (realIndex !== -1) {
+            topics[realIndex].date = newDate;
+            await saveData();
+            render();
+        }
+    });
+    dateInput.addEventListener('blur', () => {
+        dateInput.style.display = 'none';
+        const badge = dateEditContainer.querySelector('.topic-date-badge');
+        if (badge) badge.style.display = '';
+    });
+
+    dateEditContainer.appendChild(dateInput);
+
+    // Click the badge to show the date picker
+    dateEditContainer.addEventListener('click', (e) => {
+        if (e.target === dateInput) return; // don't toggle if clicking input itself
+        const badge = dateEditContainer.querySelector('.topic-date-badge');
+        if (badge) badge.style.display = 'none';
+        dateInput.style.display = '';
+        dateInput.showPicker ? dateInput.showPicker() : dateInput.focus();
+    });
+
+    if (calendarDateFilter === null) {
+        li.appendChild(dateEditContainer);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const realIndex = topics.findIndex(t => t.id === topic.id);
+
+    if (topic.status !== 'done') {
+        const doneBtn = document.createElement('button');
+        doneBtn.className = 'btn-status';
+        doneBtn.textContent = '✅ Done';
+        doneBtn.addEventListener('click', async () => {
+            topics[realIndex].status = 'done';
+            await saveData();
+            render();
+        });
+        actions.appendChild(doneBtn);
+    }
+
+    if (topic.status !== 'in-progress') {
+        const progressBtn = document.createElement('button');
+        progressBtn.className = 'btn-status';
+        progressBtn.textContent = '📖 In Progress';
+        progressBtn.addEventListener('click', async () => {
+            topics[realIndex].status = 'in-progress';
+            await saveData();
+            render();
+        });
+        actions.appendChild(progressBtn);
+    }
+
+    if (topic.status !== 'todo') {
+        const todoBtn = document.createElement('button');
+        todoBtn.className = 'btn-status';
+        todoBtn.textContent = '📋 To Do';
+        todoBtn.addEventListener('click', async () => {
+            topics[realIndex].status = 'todo';
+            await saveData();
+            render();
+        });
+        actions.appendChild(todoBtn);
+    }
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn-delete';
+    deleteBtn.textContent = '🗑 Delete';
+    deleteBtn.addEventListener('click', async () => {
+        topics.splice(realIndex, 1);
+        await saveData();
+        render();
+    });
+    actions.appendChild(deleteBtn);
+
+    li.appendChild(reorderDiv);
+    li.appendChild(nameSpan);
+    li.appendChild(badge);
+    li.appendChild(actions);
+
+    return li;
 }
 
 function updateStats() {
@@ -511,6 +779,7 @@ async function addTopic() {
         name: name,
         status: statusSelect.value,
         rank: maxRank + 1,
+        date: topicDateInput.value || null,
         createdAt: new Date().toISOString()
     };
 
@@ -535,6 +804,32 @@ function setFilter(filter) {
 }
 
 // ============================================================
+// VIEW TOGGLE
+// ============================================================
+
+function setView(view) {
+    currentView = view;
+    viewBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+    });
+
+    if (view === 'calendar') {
+        calendarView.style.display = 'block';
+        // If there's a date filter active, clear it when switching to calendar view
+        if (calendarDateFilter !== null) {
+            clearDateFilter();
+        }
+        renderCalendar();
+        // Hide the filter info bar in calendar view
+        filterInfo.style.display = 'none';
+    } else {
+        calendarView.style.display = 'none';
+    }
+
+    render();
+}
+
+// ============================================================
 // EVENT LISTENERS
 // ============================================================
 
@@ -550,6 +845,24 @@ filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         setFilter(btn.dataset.filter);
     });
+});
+
+viewBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        setView(btn.dataset.view);
+    });
+});
+
+clearDateFilterBtn.addEventListener('click', clearDateFilter);
+
+calendarPrevBtn.addEventListener('click', () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+    renderCalendar();
+});
+
+calendarNextBtn.addEventListener('click', () => {
+    calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+    renderCalendar();
 });
 
 examSetBtn.addEventListener('click', async () => {
@@ -600,9 +913,15 @@ examClearBtn.addEventListener('click', async () => {
         await saveData();
     }
 
+    // Set default date on topic date input to today
+    topicDateInput.value = new Date().toISOString().slice(0, 10);
+
     if (examDate) {
         showCountdown();
     }
+
+    // Initial calendar render (hidden until user clicks Calendar tab)
+    renderCalendar();
 
     render();
 })();
