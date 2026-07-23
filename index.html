@@ -76,6 +76,7 @@
             <div class="view-toggle">
                 <button class="view-btn active" data-view="list">📋 List</button>
                 <button class="view-btn" data-view="calendar">📅 Calendar</button>
+                <button class="view-btn" data-view="events">🎭 Events</button>
             </div>
 
             <!-- Add Topic -->
@@ -131,7 +132,7 @@
             </div>
 
             <!-- Pie Chart -->
-            <div class="chart-section">
+            <div class="chart-section" id="studyChartSection">
                 <div class="chart-container">
                     <svg id="pieChart" viewBox="0 0 240 240" width="200" height="200">
                         <circle cx="120" cy="120" r="100" fill="none" stroke="#f0d4e8" stroke-width="40" />
@@ -155,6 +156,62 @@
                         <span class="legend-count" id="legendDone">0</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- EVENTS SECTION (hidden by default) -->
+            <!-- ============================================================ -->
+            <div id="eventsSection" class="events-section" style="display: none;">
+
+                <!-- Add Event -->
+                <div class="add-event">
+                    <input type="text" id="eventNameInput" placeholder="Event name..." maxlength="100">
+                    <input type="date" id="eventDateInput">
+                    <input type="time" id="eventTimeInput">
+                    <select id="eventCategorySelect">
+                        <option value="personal">💖 Personal</option>
+                        <option value="social">🎉 Social</option>
+                        <option value="health">🏥 Health</option>
+                        <option value="travel">✈️ Travel</option>
+                        <option value="work">💼 Work</option>
+                        <option value="other">📌 Other</option>
+                    </select>
+                    <button id="addEventBtn">+ Add Event</button>
+                </div>
+
+                <!-- Events Calendar -->
+                <div class="events-calendar-section">
+                    <div class="calendar-nav">
+                        <button id="eventsCalendarPrevBtn" class="btn-calendar-nav">◀</button>
+                        <span id="eventsMonthLabel" class="calendar-month-label"></span>
+                        <button id="eventsCalendarNextBtn" class="btn-calendar-nav">▶</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                    </div>
+                    <div id="eventsCalendarGrid" class="calendar-grid"></div>
+                    <p class="calendar-hint">Click a day to view & manage events for that date</p>
+                </div>
+
+                <!-- Events filter info bar -->
+                <div id="eventsFilterInfo" class="filter-info" style="display: none;">
+                    <span id="eventsFilterInfoText"></span>
+                    <button id="clearEventsDateFilterBtn" class="btn-clear-filter">✕ Clear</button>
+                </div>
+
+                <!-- Events list -->
+                <div id="eventsListContainer">
+                    <div class="events-list-header">
+                        <span id="eventsCount">0 events</span>
+                    </div>
+                    <div id="eventsList"></div>
+                    <div id="eventsEmptyState" class="empty-state">
+                        <div class="empty-icon">🎭</div>
+                        <p class="empty-title">No events yet!</p>
+                        <p class="empty-sub">Add your first event above 💕</p>
+                    </div>
+                </div>
+
             </div>
         </main>
 

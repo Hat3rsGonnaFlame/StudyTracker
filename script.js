@@ -40,14 +40,28 @@ try {
 // STATE
 // ============================================================
 let topics = [];
+let events = [];
 let currentFilter = 'all';
 let examDate = null;
 let countdownInterval = null;
 let dataLoaded = false;
-let currentView = 'list'; // 'list' or 'calendar'
+let currentView = 'list'; // 'list', 'calendar', or 'events'
 let calendarDateFilter = null; // YYYY-MM-DD string when a day is selected in calendar
 let calendarMonth = new Date();
 calendarMonth.setDate(1); // First of current month for calendar rendering
+
+// Events state
+let eventsCalendarMonth = new Date();
+eventsCalendarMonth.setDate(1);
+let eventsDateFilter = null;
+const EVENT_CATEGORIES = {
+    'personal': { label: '💖 Personal', color: '#e91e63' },
+    'social': { label: '🎉 Social', color: '#ff9800' },
+    'health': { label: '🏥 Health', color: '#4caf50' },
+    'travel': { label: '✈️ Travel', color: '#2196f3' },
+    'work': { label: '💼 Work', color: '#9c27b0' },
+    'other': { label: '📌 Other', color: '#607d8b' }
+};
 
 // Fixed document ID so all devices share the same data
 const SHARED_DOC_ID = 'cherryl-shared-data';
@@ -97,6 +111,24 @@ const legendTodo = document.getElementById('legendTodo');
 const legendProgress = document.getElementById('legendProgress');
 const legendDone = document.getElementById('legendDone');
 
+// Events elements
+const eventsSection = document.getElementById('eventsSection');
+const eventNameInput = document.getElementById('eventNameInput');
+const eventDateInput = document.getElementById('eventDateInput');
+const eventTimeInput = document.getElementById('eventTimeInput');
+const eventCategorySelect = document.getElementById('eventCategorySelect');
+const addEventBtn = document.getElementById('addEventBtn');
+const eventsCalendarGrid = document.getElementById('eventsCalendarGrid');
+const eventsMonthLabel = document.getElementById('eventsMonthLabel');
+const eventsCalendarPrevBtn = document.getElementById('eventsCalendarPrevBtn');
+const eventsCalendarNextBtn = document.getElementById('eventsCalendarNextBtn');
+const eventsFilterInfo = document.getElementById('eventsFilterInfo');
+const eventsFilterInfoText = document.getElementById('eventsFilterInfoText');
+const clearEventsDateFilterBtn = document.getElementById('clearEventsDateFilterBtn');
+const eventsList = document.getElementById('eventsList');
+const eventsEmptyState = document.getElementById('eventsEmptyState');
+const eventsCount = document.getElementById('eventsCount');
+
 // ============================================================
 // CLOUD SYNC (Firestore) — shared across all devices
 // ============================================================
@@ -108,6 +140,7 @@ async function saveToCloud() {
     try {
         await db.collection('study-tracker').doc(SHARED_DOC_ID).set({
             topics: topics,
+            events: events,
             examDate: examDate ? examDate.toISOString() : null,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -156,6 +189,7 @@ async function loadFromCloud() {
         if (doc.exists) {
             const data = doc.data();
             if (data.topics) topics = data.topics;
+            if (data.events) events = data.events;
             if (data.examDate) {
                 examDate = new Date(data.examDate);
                 if (isNaN(examDate.getTime())) examDate = null;
@@ -186,6 +220,15 @@ function loadFromLocal() {
         }
     }
 
+    const eventsStored = localStorage.getItem('cherryl-tracker-events');
+    if (eventsStored) {
+        try {
+            events = JSON.parse(eventsStored);
+        } catch {
+            events = [];
+        }
+    }
+
     const examStored = localStorage.getItem('cherryl-tracker-exam');
     if (examStored) {
         try {
@@ -199,6 +242,7 @@ function loadFromLocal() {
 
 function saveToLocal() {
     localStorage.setItem('cherryl-tracker-topics', JSON.stringify(topics));
+    localStorage.setItem('cherryl-tracker-events', JSON.stringify(events));
     if (examDate) {
         localStorage.setItem('cherryl-tracker-exam', examDate.toISOString());
     } else {
@@ -837,7 +881,28 @@ function setView(view) {
         calendarView.style.display = 'none';
     }
 
-    render();
+    // Show/hide study-related sections vs events section
+    const studySections = [
+        document.querySelector('.add-topic'),
+        document.querySelector('.filters'),
+        document.querySelector('.stats'),
+        document.getElementById('topicList'),
+        document.getElementById('emptyState'),
+        document.getElementById('studyChartSection'),
+        document.getElementById('filterInfo'),
+        document.getElementById('calendarView')
+    ];
+
+    if (view === 'events') {
+        eventsSection.style.display = 'block';
+        studySections.forEach(el => { if (el) el.style.display = 'none'; });
+        renderEventsCalendar();
+        renderEventsList();
+    } else {
+        eventsSection.style.display = 'none';
+        studySections.forEach(el => { if (el) el.style.display = ''; });
+        render();
+    }
 }
 
 // ============================================================
@@ -906,6 +971,251 @@ examClearBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
+// EVENTS CALENDAR
+// ============================================================
+
+function renderEventsCalendar() {
+    const year = eventsCalendarMonth.getFullYear();
+    const month = eventsCalendarMonth.getMonth();
+
+    const options = { year: 'numeric', month: 'long' };
+    eventsMonthLabel.textContent = eventsCalendarMonth.toLocaleDateString('en-US', options);
+
+    // Build date lookup for events
+    const dateCounts = {};
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    events.forEach(e => {
+        const d = e.date || 'unscheduled';
+        if (!dateCounts[d]) dateCounts[d] = 0;
+        dateCounts[d]++;
+    });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    let html = '';
+
+    // Previous month's trailing days
+    const prevMonthYear = month === 0 ? year - 1 : year;
+    const prevMonth = month === 0 ? 11 : month - 1;
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const day = daysInPrevMonth - i;
+        const dateStr = `${prevMonthYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = dateCounts[dateStr] || 0;
+        html += `<div class="calendar-day other-month">${day}${count > 0 ? `<span class="day-dot"></span>` : ''}</div>`;
+    }
+
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = dateCounts[dateStr] || 0;
+        const isToday = dateStr === todayStr;
+        const isSelected = dateStr === eventsDateFilter;
+        const hasEvents = count > 0;
+
+        let cls = 'calendar-day';
+        if (isToday) cls += ' today';
+        if (isSelected) cls += ' selected';
+        if (hasEvents) cls += ' has-topics';
+
+        html += `<div class="${cls}" data-date="${dateStr}">`;
+        html += `<span>${day}</span>`;
+        if (count > 0) {
+            html += `<span class="day-count">${count}</span>`;
+        }
+        html += `</div>`;
+    }
+
+    // Next month's leading days
+    const totalCells = firstDay + daysInMonth;
+    const remaining = totalCells <= 35 ? 35 - totalCells : 42 - totalCells;
+    const nextMonthYear = month === 11 ? year + 1 : year;
+    const nextMonth = month === 11 ? 0 : month + 1;
+    for (let day = 1; day <= remaining; day++) {
+        const dateStr = `${nextMonthYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = dateCounts[dateStr] || 0;
+        html += `<div class="calendar-day other-month">${day}${count > 0 ? `<span class="day-dot"></span>` : ''}</div>`;
+    }
+
+    eventsCalendarGrid.innerHTML = html;
+
+    // Click handlers
+    eventsCalendarGrid.querySelectorAll('.calendar-day:not(.other-month)').forEach(el => {
+        el.addEventListener('click', () => {
+            const date = el.dataset.date;
+            selectEventsDay(date);
+        });
+    });
+}
+
+function selectEventsDay(dateStr) {
+    eventsDateFilter = dateStr;
+
+    eventsFilterInfo.style.display = 'flex';
+    const count = events.filter(e => (e.date || 'unscheduled') === dateStr).length;
+    const label = formatDateLabel(dateStr);
+    eventsFilterInfoText.textContent = `${label} — ${count} event${count !== 1 ? 's' : ''}`;
+
+    // Set date input for adding events
+    eventDateInput.value = dateStr;
+
+    renderEventsList();
+    renderEventsCalendar();
+}
+
+function clearEventsDateFilter() {
+    eventsDateFilter = null;
+    eventsFilterInfo.style.display = 'none';
+    eventDateInput.value = '';
+    renderEventsList();
+}
+
+// ============================================================
+// EVENTS CRUD
+// ============================================================
+
+function renderEventsList() {
+    let filtered = [...events];
+
+    if (eventsDateFilter !== null) {
+        filtered = filtered.filter(e => (e.date || 'unscheduled') === eventsDateFilter);
+    }
+
+    // Sort by date (newest first), then by time if available
+    filtered.sort((a, b) => {
+        if (a.date && b.date) {
+            const cmp = a.date.localeCompare(b.date);
+            if (cmp !== 0) return cmp;
+            // Same date — sort by time or name
+            if (a.time && b.time) return a.time.localeCompare(b.time);
+            if (a.time) return -1;
+            if (b.time) return 1;
+        }
+        if (a.date) return -1;
+        if (b.date) return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    eventsList.innerHTML = '';
+    eventsCount.textContent = `${filtered.length} event${filtered.length !== 1 ? 's' : ''}`;
+
+    if (filtered.length === 0) {
+        eventsEmptyState.style.display = 'block';
+        eventsList.style.display = 'none';
+    } else {
+        eventsEmptyState.style.display = 'none';
+        eventsList.style.display = 'block';
+
+        filtered.forEach(event => {
+            const el = document.createElement('div');
+            el.className = 'event-item';
+
+            const cat = EVENT_CATEGORIES[event.category] || EVENT_CATEGORIES['other'];
+            const colorDot = document.createElement('span');
+            colorDot.className = 'event-category-dot';
+            colorDot.style.backgroundColor = cat.color;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'event-name';
+            nameSpan.textContent = event.name;
+
+            const metaSpan = document.createElement('span');
+            metaSpan.className = 'event-meta';
+
+            let metaText = cat.label;
+            if (event.time) {
+                // Format time nicely
+                const timeParts = event.time.split(':');
+                const h = parseInt(timeParts[0]);
+                const m = timeParts[1];
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 || 12;
+                metaText += ` · ${h12}:${m} ${ampm}`;
+            }
+            metaSpan.textContent = metaText;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn-delete btn-delete-event';
+            deleteBtn.textContent = '🗑';
+            deleteBtn.title = 'Delete event';
+            deleteBtn.addEventListener('click', async () => {
+                const idx = events.findIndex(e => e.id === event.id);
+                if (idx !== -1) {
+                    events.splice(idx, 1);
+                    await saveData();
+                    renderEventsList();
+                    renderEventsCalendar();
+                }
+            });
+
+            el.appendChild(colorDot);
+            el.appendChild(nameSpan);
+            el.appendChild(metaSpan);
+            el.appendChild(deleteBtn);
+            eventsList.appendChild(el);
+        });
+    }
+}
+
+async function addEvent() {
+    const name = eventNameInput.value.trim();
+    if (!name) {
+        eventNameInput.focus();
+        return;
+    }
+
+    if (!eventDateInput.value) {
+        alert('Please select a date for the event!');
+        eventDateInput.focus();
+        return;
+    }
+
+    const event = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        name: name,
+        date: eventDateInput.value,
+        time: eventTimeInput.value || null,
+        category: eventCategorySelect.value,
+        createdAt: new Date().toISOString()
+    };
+
+    events.push(event);
+    await saveData();
+
+    eventNameInput.value = '';
+    eventTimeInput.value = '';
+
+    renderEventsList();
+    renderEventsCalendar();
+}
+
+// ============================================================
+// EVENTS EVENT LISTENERS
+// ============================================================
+
+addEventBtn.addEventListener('click', addEvent);
+
+eventNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        addEvent();
+    }
+});
+
+eventsCalendarPrevBtn.addEventListener('click', () => {
+    eventsCalendarMonth.setMonth(eventsCalendarMonth.getMonth() - 1);
+    renderEventsCalendar();
+});
+
+eventsCalendarNextBtn.addEventListener('click', () => {
+    eventsCalendarMonth.setMonth(eventsCalendarMonth.getMonth() + 1);
+    renderEventsCalendar();
+});
+
+clearEventsDateFilterBtn.addEventListener('click', clearEventsDateFilter);
+
+// ============================================================
 // INITIALIZE
 // ============================================================
 
@@ -933,6 +1243,10 @@ examClearBtn.addEventListener('click', async () => {
 
     // Initial calendar render (hidden until user clicks Calendar tab)
     renderCalendar();
+
+    // Initial events calendar render (hidden until user clicks Events tab)
+    renderEventsCalendar();
+    renderEventsList();
 
     render();
 })();
